@@ -1,0 +1,104 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  # Jalankan pipeline saat ada push ke branch main
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+  build_and_push_ecr:
+    needs: install
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ ASIAZI2LEAKINP4XB3KG }}
+          aws-secret-access-key: ${{ 0egeZ2pockHWHF3EHVnCKuYLZcIuWqWspInqd1S9 }}
+          aws-session-token: ${{ IQoJb3JpZ2luX2VjEIH//////////wEaCXVzLXdlc3QtMiJHMEUCIBr2ATr57oP/Mk3iCLTbDOdWtiwoasXfzFdGkaoteU50AiEAj3dNpBn/bQ3Bd70Hc4YBctGq9YgudVUePQ/HzauVBb4qvAIIOhAAGgw2Mzc0MjMzMjE3NDQiDPDwNtvF+aTlY/reqCqZAnXsKjRH6Z6dUsG6bOJ3NVEStg0OYMCpH3NnzBTEOb3MmobD3hLhc1slmMKbel/Q7KP1jikqE9A9U7vVnfWHJWySpWmFfjFlfc2n5XM5rBnQaN4jRA7tve+5UW7XeIUAjbHdLObkmJE8dZBuYgveRUprOxtOpJFozulV3cNd6CUHNuGtoQeweqfqDDfcDiURXDNUsnH4eIdu5PlFD8X30q6PeEqm4UGtdABIorZZbiiSULhdIgKpYJ1yJZnGHU9bcu9ls051DY6bPoOShJIs+J7Y+xxXMiY4Z2TcqvA/GPWikfbFCy74DUv2yXjZB7daHVurhAXnBwXkkEjMkrZ0bJe6w2mM5h+Jn6Tq7ICXproBu+4yp7kbhaocMOScmsEGOp0BZE7RaMMkaDfQK7aU0KeSIiS49s6l1QH+i8zF7G7JikePqbRSTbZaQ6jCD1uEUTSW0O3cGUffcuVAfLY2Z8dhNfJu6Qs4QwhWNLe+I/k1w9HFZByvYwS+45rN0OLNr8QnYNsU1sRd7R5IJamxvc6vFdfaz5L4mT+JKFY1M0EQ73Y+pYGjcGGOv38NgxEliPwbpreA17UkBkqGgX19Ww== }}
+          aws-region: ${{ us-east-1 }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  upload_to_s3:
+    needs: build_and_push_ecr
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Zip the application
+        run: zip -r flask-app.zip .
+
+      - name: Upload ZIP to S3
+        run: |
+          aws s3 cp flask-app.zip s3://${{ secrets.S3_BUCKET_NAME }}/flask-app.zip
+        env:
+          aws-access-key-id: ${{ ASIAZI2LEAKINP4XB3KG }}
+          aws-secret-access-key: ${{ 0egeZ2pockHWHF3EHVnCKuYLZcIuWqWspInqd1S9 }}
+          aws-session-token: ${{ IQoJb3JpZ2luX2VjEIH//////////wEaCXVzLXdlc3QtMiJHMEUCIBr2ATr57oP/Mk3iCLTbDOdWtiwoasXfzFdGkaoteU50AiEAj3dNpBn/bQ3Bd70Hc4YBctGq9YgudVUePQ/HzauVBb4qvAIIOhAAGgw2Mzc0MjMzMjE3NDQiDPDwNtvF+aTlY/reqCqZAnXsKjRH6Z6dUsG6bOJ3NVEStg0OYMCpH3NnzBTEOb3MmobD3hLhc1slmMKbel/Q7KP1jikqE9A9U7vVnfWHJWySpWmFfjFlfc2n5XM5rBnQaN4jRA7tve+5UW7XeIUAjbHdLObkmJE8dZBuYgveRUprOxtOpJFozulV3cNd6CUHNuGtoQeweqfqDDfcDiURXDNUsnH4eIdu5PlFD8X30q6PeEqm4UGtdABIorZZbiiSULhdIgKpYJ1yJZnGHU9bcu9ls051DY6bPoOShJIs+J7Y+xxXMiY4Z2TcqvA/GPWikfbFCy74DUv2yXjZB7daHVurhAXnBwXkkEjMkrZ0bJe6w2mM5h+Jn6Tq7ICXproBu+4yp7kbhaocMOScmsEGOp0BZE7RaMMkaDfQK7aU0KeSIiS49s6l1QH+i8zF7G7JikePqbRSTbZaQ6jCD1uEUTSW0O3cGUffcuVAfLY2Z8dhNfJu6Qs4QwhWNLe+I/k1w9HFZByvYwS+45rN0OLNr8QnYNsU1sRd7R5IJamxvc6vFdfaz5L4mT+JKFY1M0EQ73Y+pYGjcGGOv38NgxEliPwbpreA17UkBkqGgX19Ww== }}
+          aws-region: ${{ us-east-1 }}
+
+  deploy:
+    needs: upload_to_s3
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ ASIAZI2LEAKINP4XB3KG }}
+          aws-secret-access-key: ${{ 0egeZ2pockHWHF3EHVnCKuYLZcIuWqWspInqd1S9 }}
+          aws-session-token: ${{ IQoJb3JpZ2luX2VjEIH//////////wEaCXVzLXdlc3QtMiJHMEUCIBr2ATr57oP/Mk3iCLTbDOdWtiwoasXfzFdGkaoteU50AiEAj3dNpBn/bQ3Bd70Hc4YBctGq9YgudVUePQ/HzauVBb4qvAIIOhAAGgw2Mzc0MjMzMjE3NDQiDPDwNtvF+aTlY/reqCqZAnXsKjRH6Z6dUsG6bOJ3NVEStg0OYMCpH3NnzBTEOb3MmobD3hLhc1slmMKbel/Q7KP1jikqE9A9U7vVnfWHJWySpWmFfjFlfc2n5XM5rBnQaN4jRA7tve+5UW7XeIUAjbHdLObkmJE8dZBuYgveRUprOxtOpJFozulV3cNd6CUHNuGtoQeweqfqDDfcDiURXDNUsnH4eIdu5PlFD8X30q6PeEqm4UGtdABIorZZbiiSULhdIgKpYJ1yJZnGHU9bcu9ls051DY6bPoOShJIs+J7Y+xxXMiY4Z2TcqvA/GPWikfbFCy74DUv2yXjZB7daHVurhAXnBwXkkEjMkrZ0bJe6w2mM5h+Jn6Tq7ICXproBu+4yp7kbhaocMOScmsEGOp0BZE7RaMMkaDfQK7aU0KeSIiS49s6l1QH+i8zF7G7JikePqbRSTbZaQ6jCD1uEUTSW0O3cGUffcuVAfLY2Z8dhNfJu6Qs4QwhWNLe+I/k1w9HFZByvYwS+45rN0OLNr8QnYNsU1sRd7R5IJamxvc6vFdfaz5L4mT+JKFY1M0EQ73Y+pYGjcGGOv38NgxEliPwbpreA17UkBkqGgX19Ww== }}
+          aws-region: ${{ us-east-1 }}
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name ${{ lks-eb-apps-verrel }} \
+            --version-label $GITHUB_SHA \
+            --source-bundle S3Bucket=${{ lks-dockerimage-verrel-25 }},S3Key=flask-app.zip \
+            --process
+
+          aws elasticbeanstalk update-environment \
+            --environment-name ${{ lks-eb-apps-verrel-env }} \
+            --version-label $GITHUB_SHA
+
+      - name: Check Elastic Beanstalk Health Status
+        run: |
+          aws elasticbeanstalk describe-environment-health \
+            --environment-name ${{ lks-eb-apps-verrel-env }} \
+            --attribute HealthStatus --query "HealthStatus"
